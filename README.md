@@ -4,6 +4,10 @@
 
 # Example of Realworld-Haskell Web Server 
 
+본 서버는 API 전용 서버입니다. 프론트엔드 렌더링 기능은 지원하지 않습니다.
+
+상세 라우팅 로직은 `\src\RealWorld\Infra\Web\Routes.hs` 를 참조
+
 ## Stack
 
 - Stack: Haskell의 빌드 도구
@@ -25,6 +29,78 @@ brew install pcre
 ```
 
 이후 postgresql를 실행합니다. 로컬에서 실행하거나 Supabase등의 DBaaS를 사용해도 좋습니다
+
+DB 스키마는 아래를 참조
+
+```
+instance ToRow Article where
+  toRow Article {..} =
+    [ toField articleId,
+      toField articleSlug,
+      toField articleTitle,
+      toField articleDescription,
+      toField articleBody,
+      toField $ PGArray $ toList articleTags,
+      toField articleAuthorId,
+      toField articleFavoritesCount,
+      toField articleCreatedAt,
+      -- for on conflict update
+      toField articleSlug,
+      toField articleTitle,
+      toField articleDescription,
+      toField articleBody,
+      toField $ PGArray $ toList articleTags,
+      toField articleAuthorId,
+      toField articleFavoritesCount
+    ]
+```
+
+
+```
+instance ToRow Comment where
+  toRow Comment {..} =
+    [ toField commentId,
+      toField commentBody,
+      toField commentCreatedAt,
+      toField commentUpdatedAt,
+      toField commentAuthorId,
+      toField commentArticleId,
+      -- for on conflict update
+      toField commentBody,
+      toField commentCreatedAt,
+      toField commentAuthorId,
+      toField commentArticleId
+    ]
+```
+
+```
+instance ToRow Favorite where
+  toRow Favorite {..} =
+    [ toField $ favoriteIdArticleId favoriteId,
+      toField $ favoriteIdUserId favoriteId,
+      toField favroiteCreatedAt
+    ]
+
+```
+
+```
+instance ToRow User where
+  toRow User {..} =
+    [ toField userId,
+      toField userUsername,
+      toField userEmail,
+      toField userHashedPassword,
+      toField userBio,
+      toField userImage,
+      toField userCreatedAt,
+      -- for on conflict update
+      toField userUsername,
+      toField userEmail,
+      toField userHashedPassword,
+      toField userBio,
+      toField userImage
+    ]
+```
 
 - 환경변수 설정. 프로덕션 실행을 위해서는 아래의 환경변수를 필요로 합니다
     - DB_HOST
