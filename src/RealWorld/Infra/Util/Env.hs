@@ -8,6 +8,7 @@ import System.Environment (getEnv)
 envRead :: (Read a) => String -> IO a
 envRead key = do
   rawVal <- getEnv key
+  putStrLn $ rawVal
   case readMay rawVal of
     Just val -> pure val
-    Nothing -> throwString $ key <> ": Unable to parse " <> rawVal
+    Nothing -> throwString $ key <> ": !!!Unable to parse " <> rawVal

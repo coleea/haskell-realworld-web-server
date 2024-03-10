@@ -26,8 +26,10 @@ configFromEnv =
   Config
     <$> HttpServer.configFromEnv
     <*> Database.configFromEnv
-    <*> envRead "JWT_SECRET"
-    <*> envRead "ENV_NAME"
+    -- <*> envRead "JWT_SECRET"
+    <*> pure "111111"
+    -- <*> envRead "ENV_NAME"
+    <*> pure "ENV_NAME"
 
 devConfig :: Config
 devConfig =
