@@ -59,20 +59,42 @@ data CommentWrapper a = CommentWrapper
 
 
 ----------------------------------------------------------------------------------------------------
--- List Articles
 
+-- ActionT ErrorResponse m ()를 반환하는 함수
+-- m은 모나드를 의미한다.
+-- ActionT는 Scotty 웹 프레임워크에서 HTTP 액션을 나타내는 타입
+
+-- ActionT에서 접미사 T는 보통 "Transformer"를 의미합니다. 
+-- 이는 해당 타입이 모나드 트랜스포머인 것을 나타냅니다.
+-- 즉 "ActionT ErrorResponse m"는 ErrorResponse 타입의 에러를 처리할 수 있는, m 모나드 위에 쌓인 액션을 나타냅니다.
 listArticles :: (MonadIO m, QueryService m, TokenGateway m) => ActionT ErrorResponse m ()
 listArticles = do
+  -- withOptionalToken은 Maybe 타입의 토큰을 처리하는 코드 
+  -- 토큰이 제공되면 그것을 사용하고, 그렇지 않으면 Nothing을 리턴
   withOptionalToken $ \token -> do
+    -- 제공된 토큰을 검증하여 사용자 ID를 얻는 코드
+    -- <$> 연산자는 Haskell에서 fmap의 중위 표현입니다.
+    -- Token <$> token는 다음과 같이 해석합니다
+    --  token 내부의 값에 함수 Token을 적용한다 -> 그 결과를 동일한 유형의 Functor로 감싸서 반환한다
     userId <- case Token <$> token of
+      --  $ 연산자는 함수 적용(application) 연산자입니다. 
+      -- '를 변수 이름에 포함시킬 수 있으며, 이는 주로 원래 변수의 수정된 버전을 의미합니다
       Just token' -> lift $ TokenGateway.verify token'
       Nothing -> pure Nothing
+    -- HTTP request의 query를 읽는 코드
+    -- `optional $`은 해당 쿼리가 옵셔널이라는 것을 나타낸다.
+    
     tag <- optional $ param "tag"
     author <- optional $ param "author"
     favorited <- optional $ param "favorited"
+
+    -- -- limit과 offset 파라미터는 값이 없는 경우 기본값을 가진다.
+    -- <|> 연산자는 대안을 제공하는 역할을 합니다. 
+    -- 이 연산자는 주로 Maybe와 같은 "Alternative" 클래스에 속하는 타입에서 사용됩니다.
     limit <- optional $ param "limit" <|> pure 20
     offset <- optional $ param "offset" <|> pure 0
     let params =
+          -- 쿼리 파라미터를 사용하여 ListArticlesParams 객체를 생성하는 코드
           Query.ListArticlesParams
             { listArticlesParamsActorId = show <$> userId,
               listArticlesParamsTag = tag,
@@ -81,6 +103,17 @@ listArticles = do
               listArticlesParamsLimit = limit,
               listArticlesParamsOffset = offset
             }
+    -- QueryService.listArticles 함수를 호출하여 결과를 JSON으로 변환하고 HTTP 응답으로 반환하는 코드\
+    -- =<< 연산자는 모나드 값을 받아서 함수를 적용하고, "그 결과를 다시 모나드에 넣는 역할"을 합니다. 
+    -- 즉, f =<< m은 m이라는 모나드 값에 f라는 함수를 적용하는 것입니다. 
+    -- 이 연산자는 함수를 모나드 값의 내부에 있는 값에 적용하고, 그 결과를 다시 모나드에 넣는 역할을 합니다.
+
+    -- lift 함수: 이 함수는 특정 액션을 다른 모나드로 "올려주는" 역할을 합니다. 
+    -- 즉, 어떤 모나드 컨텍스트에서 동작하는 함수를 다른 모나드 컨텍스트로 옮겨줍니다. 
+    -- 이 경우에는 "QueryService.listArticles params라는" QueryService m 모나드에서 동작하는 함수를 
+    -- "ActionT ErrorResponse m" 모나드로 옮겨주는 역할을 합니다.
+    -- "ActionT ErrorResponse m"은 함수 시그니처에 정의된 리턴 타입입니다.
+    -- 즉 lift는 함수 시그니처에 정의된 리턴 타입을 만족시키기 위해 사용되는 함수입니다.
     json =<< lift (QueryService.listArticles params)
 
 ----------------------------------------------------------------------------------------------------
@@ -89,6 +122,10 @@ listArticles = do
 feedArticles :: (MonadIO m, QueryService m, TokenGateway m) => ActionT ErrorResponse m ()
 feedArticles = do
   withRequiredToken $ \token -> do
+    -- !? 연산자 : Haskell에서는 !? 같은 연산자가 기본 제공되지 않으며, 코드의 특정 부분에서만 의미를 가지는 연산자일 수 있습니다
+    -- Scotty 웹 프레임워크에서 !? 연산자는 일반적으로 사용자가 요청한 리소스나 데이터를 찾을 수 없을 때 사용하는 오류 처리 메커니즘과 관련이 있습니다. 
+    -- 이 연산자는 특정 조건이 만족되지 않을 때 HTTP 에러를 반환하는 데 사용됩니다. 예를 들어, 데이터베이스에서 특정 데이터를 조회했을 때 그 데이터가 존재하지 않는 경우 
+    -- !? 연산자를 사용하여 404 Not Found와 같은 적절한 HTTP 상태 코드와 메시지를 클라이언트에게 반환할 수 있습니다.
     userId <- TokenGateway.verify (Token token) !? unauthorized "Unauthorized"
     limit <- fromMaybe 20 <$> optional (param "limit")
     offset <- fromMaybe 0 <$> optional (param "offset")
@@ -134,15 +171,42 @@ createArticle ::
 createArticle = do
   withRequiredToken $ \token -> do
     ArticleWrapper input <- jsonData
+    -- 아래 코드에서는 $ 연산자가 2개 등장한다
+    -- $ 연산자는 오른쪽 결합성(right-associative)을 가지기 때문에, 오른쪽의 연산자부터 먼저 적용됩니다.
+    -- 따라서 아래 식은 먼저 toCommand 함수가 호출되며 이 리턴값을 인자로 삼아 ArticleUseCase.createArticle가 호출된다
+    -- 그리고 ArticleUseCase.createArticle의 리턴값을 인자로 삼아 lift 함수가 호출된다
     result <- lift $ ArticleUseCase.createArticle $ toCommand token input
-    case result of
+    case result of      
+      -- Haskell에서 @ 기호는 패턴 매칭을 할 때 사용되는 "as 패턴"을 나타냅니다. 
+      -- 이는 매칭되는 값을 변수에 바인딩하면서, 동시에 해당 값의 구조를 더 분해(destructure)할 수 있게 해줍니다. 
+      -- 즉, 전체 구조를 참조할 수 있는 이름과 함께, 구조 내부의 특정 부분에 접근할 수 있습니다.
+      -- result'@CreateArticleResult {..}에서 result'는 CreateArticleResult 타입의 값 전체를 참조하는 데 사용되는 변수 이름입니다
+      -- CreateArticleResult 타입의 값이 패턴 매칭되며, {..}는 그 안에 있는 모든 필드를 매칭시키고 이름으로 참조할 수 있게 합니다. 
+      -- 이는 당신이 CreateArticleResult 타입의 구조를 알고 있으며, 그 구조 내의 필드를 사용하고자 할 때 유용합니다.
+
+      -- {..}는 레코드 와일드카드 패턴 (Record Wildcards)을 나타냅니다. 
+      -- 이는 레코드 타입의 인스턴스에서 모든 필드를 지역 변수로 자동으로 바인딩하는 데 사용됩니다. 
+      -- 즉, CreateArticleInput 타입의 인스턴스가 가지고 있는 모든 필드를 함수 내부에서 직접 사용될 수 있게 됩니다.
+      -- CreateArticleResult 데이터 타입의 필드는 다음의 소스를 참조할 것 : "src\RealWorld\Domain\Command\Article\UseCase.hs"
       Right result'@CreateArticleResult {..} -> do
         let params = Query.GetProfileParams Nothing createArticleResultAuthorUsername
         profile <- QueryService.getProfile params !? notFound "Author not found"
         json $ ArticleWrapper $ toArticle input result' profile
       Left err -> do
         lift $ katipAddContext (sl "error" err) $ do
+          -- $(logTM): Template Haskell을 사용하는 문법입니다. 
+          -- TM은 Monad Transformer의 약자입니다. 
+          -- logTM은 이러한 Monad Transformer 스택을 사용하는 컨텍스트에서 로깅을 수행하도록 설계된 함수나 매크로를 의미합니다.
+          -- logTM은 로깅 함수에 대한 Template Haskell 스파이스(spicery)를 의미하며, 컴파일 타임에 실제 로깅 함수로 대체됩니다. 
+          -- Template Haskell을 사용하는 이유 중 하나는 코드의 중복을 줄이고, 컴파일 시간에 코드를 생성하거나 수정하여 유연성을 높이는 것입니다.
+
+          -- ErrorS : 로그의 심각도를 나타내는 값입니다. S는 Severity의 약자입니다 
+          -- 여기서 ErrorS는 Error 수준의 로그를 나타냅니다. 
+          -- 다른 로그 수준으로는 DebugS, InfoS, WarningS 등이 있습니다.
           $(logTM) ErrorS "createArticle error"
+
+        -- 아래 코드에서 raise는 오류 상황을 처리하는 표준적인 방법을 따르고 있으며, 
+        -- 이는 특정 조건(여기서는 createArticle 함수의 실패)에서 예외를 발생시키고, 이를 상위 수준에서 적절히 처리하도록 합니다.
         raise $ invalid $ show err
   where
     toCommand :: Text -> CreateArticleInput -> ArticleUseCase.CreateArticleCommand
