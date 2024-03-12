@@ -8,6 +8,12 @@
 
 상세 라우팅 로직은 `\src\RealWorld\Infra\Web\Routes.hs` 를 참조
 
+## 코드 주석
+
+일부 코드에는 학습용 주석이 달려 있습니다. 상세는 `\src\RealWorld\Infra\Web\Controller\Article.hs` 를 참조하세요
+
+
+
 ## Stack
 
 - Stack: Haskell의 빌드 도구
